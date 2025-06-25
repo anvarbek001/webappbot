@@ -70,12 +70,12 @@ app.post("/register", (req, res) => {
 bot.start((ctx) => {
   ctx.reply("Web App ro‘yxatdan o‘tish uchun tugmani bosing", {
     reply_markup: {
-      keyboard: [
+      inline_keyboard: [
         [
           {
             text: "📝 Ro‘yxatdan o‘tish",
             web_app: {
-              url: "https://biologiyarenessans-jet.vercel.app/", // 🔗 Frontend (Vercel) URL
+              url: "https://biologiyarenessans-jet.vercel.app/",
             },
           },
         ],
