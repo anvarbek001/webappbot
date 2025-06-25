@@ -75,7 +75,7 @@ bot.start((ctx) => {
           {
             text: "📝 Ro‘yxatdan o‘tish",
             web_app: {
-              url: "https://biologiyarenessans.vercel.app", // 🔗 Frontend (Vercel) URL
+              url: "https://biologiyarenessans-jet.vercel.app/", // 🔗 Frontend (Vercel) URL
             },
           },
         ],
