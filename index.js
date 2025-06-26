@@ -1,91 +1,70 @@
 /** @format */
 
-const express = require("express");
-const { Telegraf } = require("telegraf");
-const crypto = require("crypto");
+const { Telegraf, Scenes, session } = require("telegraf");
 const fs = require("fs");
-const cors = require("cors");
 
-// ⚠️ Token endi Render environment'dan olinadi
-const botToken = process.env.BOT_TOKEN;
-const bot = new Telegraf(botToken);
+const bot = new Telegraf(process.env.BOT_TOKEN);
 
-const app = express();
-app.use(cors());
-app.use(express.json());
+// Bosqichlar
+const registerWizard = new Scenes.WizardScene(
+  "register",
+  (ctx) => {
+    ctx.reply("👤 Ism va familiyangizni kiriting:");
+    ctx.wizard.state.data = {};
+    return ctx.wizard.next();
+  },
+  (ctx) => {
+    ctx.wizard.state.data.full_name = ctx.message.text;
+    ctx.reply("📅 Yosh (masalan: 18):");
+    return ctx.wizard.next();
+  },
+  (ctx) => {
+    ctx.wizard.state.data.age = ctx.message.text;
+    ctx.reply("🏫 Sinf:");
+    return ctx.wizard.next();
+  },
+  (ctx) => {
+    ctx.wizard.state.data.grade = ctx.message.text;
+    ctx.reply("🌍 Viloyat:");
+    return ctx.wizard.next();
+  },
+  (ctx) => {
+    ctx.wizard.state.data.region = ctx.message.text;
+    ctx.reply("🏙 Tuman:");
+    return ctx.wizard.next();
+  },
+  (ctx) => {
+    ctx.wizard.state.data.district = ctx.message.text;
+    ctx.reply("📞 Telefon raqam:");
+    return ctx.wizard.next();
+  },
+  (ctx) => {
+    ctx.wizard.state.data.phone = ctx.message.text;
 
-const TELEGRAM_BOT_SECRET = crypto
-  .createHash("sha256")
-  .update(botToken)
-  .digest();
+    // Saqlash
+    const userData = ctx.wizard.state.data;
+    const users = fs.existsSync("users.json")
+      ? JSON.parse(fs.readFileSync("users.json", "utf8"))
+      : [];
 
-// 🔐 Telegram initData ni tekshirish
-function validateInitData(initData) {
-  try {
-    const urlParams = new URLSearchParams(initData);
-    const hash = urlParams.get("hash");
-    urlParams.delete("hash");
+    users.push(userData);
+    fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
 
-    const dataCheckString = [...urlParams.entries()]
-      .map(([key, val]) => `${key}=${val}`)
-      .sort()
-      .join("\n");
-
-    const hmac = crypto
-      .createHmac("sha256", TELEGRAM_BOT_SECRET)
-      .update(dataCheckString)
-      .digest("hex");
-
-    return hmac === hash;
-  } catch (e) {
-    return false;
+    ctx.reply("✅ Ro'yxatdan muvaffaqiyatli o'tdingiz!");
+    return ctx.scene.leave();
   }
-}
+);
 
-// 💾 POST /register — foydalanuvchini saqlash
-app.post("/register", (req, res) => {
-  const { initData, full_name, age, grade, region, district, phone } = req.body;
+// Scene va session'ni ulaymiz
+const stage = new Scenes.Stage([registerWizard]);
+bot.use(session());
+bot.use(stage.middleware());
 
-  if (!validateInitData(initData)) {
-    return res
-      .status(403)
-      .json({ status: "error", message: "Init data noto‘g‘ri!" });
-  }
+// /start va /register komandasi
+bot.start((ctx) =>
+  ctx.reply("👋 Salom! Ro‘yxatdan o‘tish uchun /register buyrug‘ini yuboring.")
+);
+bot.command("register", (ctx) => ctx.scene.enter("register"));
 
-  const userData = { full_name, age, grade, region, district, phone };
-
-  // ⚠️ Render-da diskga yozish ishlaydi, lekin kichik loyihalarda. Keyinchalik DB ishlatish tavsiya qilinadi.
-  const usersFile = "users.json";
-  const users = fs.existsSync(usersFile)
-    ? JSON.parse(fs.readFileSync(usersFile, "utf8"))
-    : [];
-
-  users.push(userData);
-  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
-
-  res.json({ status: "success", message: "✅ Ro'yxatdan o'tdingiz!" });
-});
-
-// 🔁 /start orqali WebApp tugmasi
-bot.start((ctx) => {
-  ctx.reply("Web App ro‘yxatdan o‘tish uchun tugmani bosing", {
-    reply_markup: {
-      inline_keyboard: [
-        [
-          {
-            text: "📝 Ro‘yxatdan o‘tish",
-            web_app: {
-              url: "https://biologiyarenessans-jet.vercel.app/",
-            },
-          },
-        ],
-      ],
-      resize_keyboard: true,
-    },
-  });
-});
-
-// 🟢 Bot va serverni ishga tushurish
+// Ishga tushirish
 bot.launch();
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server ${PORT}-portda ishlamoqda`));
