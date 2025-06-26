@@ -1,7 +1,7 @@
 /** @format */
 require("dotenv").config();
 const express = require("express");
-const { Telegraf } = require("telegraf");
+const { Telegraf, session } = require("telegraf");
 const crypto = require("crypto");
 const fs = require("fs");
 const cors = require("cors");
@@ -12,6 +12,7 @@ const app = express();
 
 app.use(cors());
 app.use(express.json());
+bot.use(session());
 
 const TELEGRAM_BOT_SECRET = crypto
   .createHash("sha256")
@@ -19,22 +20,21 @@ const TELEGRAM_BOT_SECRET = crypto
   .digest();
 
 const ADMIN_PHONES = ["+998940621661", "+998938731809"];
+const USED_LINKS = new Set();
+
 function validateInitData(initData) {
   try {
     const urlParams = new URLSearchParams(initData);
     const hash = urlParams.get("hash");
     urlParams.delete("hash");
-
     const dataCheckString = [...urlParams.entries()]
       .map(([key, val]) => `${key}=${val}`)
       .sort()
       .join("\n");
-
     const hmac = crypto
       .createHmac("sha256", TELEGRAM_BOT_SECRET)
       .update(dataCheckString)
       .digest("hex");
-
     return hmac === hash;
   } catch (e) {
     return false;
@@ -73,6 +73,7 @@ app.post("/register", (req, res) => {
     ref_by: ref || null,
     is_admin: ADMIN_PHONES.includes(phone),
   };
+
   users.push(userData);
 
   if (ref) {
@@ -86,148 +87,83 @@ app.post("/register", (req, res) => {
   res.json({ status: "success", message: "✅ Ro'yxatdan o'tdingiz!" });
 });
 
-bot.start((ctx) => {
-  const refId = ctx.message.text.split(" ")[1];
-  const chatId = ctx.from.id;
-  const fullName = `${ctx.from.first_name} ${ctx.from.last_name || ""}`.trim();
-
+bot.command("refreshadmin", (ctx) => {
   const users = fs.existsSync("users.json")
     ? JSON.parse(fs.readFileSync("users.json", "utf8"))
     : [];
-
-  const isNewUser = !users.find((u) => u.chat_id === chatId);
-
-  if (isNewUser) {
-    const newUser = {
-      chat_id: chatId,
-      full_name: fullName,
-      balance: 0,
-      ref_by: refId || null,
-      is_admin: false,
-    };
-    users.push(newUser);
-
-    if (refId) {
-      const refUser = users.find((u) => u.chat_id == refId);
-      if (refUser) {
-        refUser.balance = (refUser.balance || 0) + 1;
-        ctx.telegram.sendMessage(
-          refUser.chat_id,
-          "🎉 Sizga 1 RBT token berildi!"
-        );
-      }
+  let count = 0;
+  users.forEach((user) => {
+    if (ADMIN_PHONES.includes(user.phone)) {
+      user.is_admin = true;
+      count++;
     }
-
-    fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
-    ctx.reply("✅ Ro'yxatdan o'tdingiz. /menu buyrug'ini bosing.");
-  } else {
-    ctx.reply("👋 Qaytib keldingiz. /menu buyrug'ini bosing.");
-  }
-});
-
-bot.command("menu", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user) return ctx.reply("❗ Ro'yxatdan o'tmagansiz.");
-
-  const baseMenu = [
-    ["🧑‍🏫 Online darslar", "🎥 Video darslar"],
-    ["📚 Kitoblar", "💰 Balansim"],
-    ["➕ Token olish"],
-  ];
-
-  if (user.is_admin) {
-    baseMenu.push(["📊 Statistika", "➕ Yangi kontent"]);
-  }
-
-  ctx.reply("👇 Kerakli bo‘limni tanlang:", {
-    reply_markup: {
-      keyboard: baseMenu,
-      resize_keyboard: true,
-    },
   });
-});
-
-bot.hears("➕ Token olish", (ctx) => {
-  const refLink = `https://t.me/${ctx.botInfo.username}?start=${ctx.from.id}`;
-  ctx.reply(
-    `📢 Do‘stlaringizni taklif qiling va token oling:\nUshbu havolani ulashing: ${refLink}`
-  );
-});
-
-bot.hears("💰 Balansim", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user) return ctx.reply("❗ Ro'yxatdan o'tmagansiz.");
-  ctx.reply(`💳 Sizda ${user.balance} RBT mavjud.`);
-});
-
-bot.hears("🧑‍🏫 Online darslar", (ctx) => {
-  ctx.reply("🧑‍🏫 Online darslar:", {
-    reply_markup: {
-      keyboard: [["🎁 Bepul darslar", "🔒 Premium darslar"], ["⬅️ Ortga"]],
-      resize_keyboard: true,
-    },
-  });
-});
-
-bot.hears("🎁 Bepul darslar", (ctx) => {
-  ctx.reply("🎁 Bepul dars: https://youtube.com/example");
-});
-
-bot.hears("🔒 Premium darslar", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user) return ctx.reply("❗ Ro'yxatdan o'tmagansiz.");
-  if (user.balance < 5)
-    return ctx.reply("❌ RBT yetarli emas. Iltimos balansingizni to‘ldiring.");
-  user.balance -= 5;
   fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
-  ctx.reply("🔒 Premium dars: https://zoom.us/j/xxxxx");
+  ctx.reply(`✅ ${count} ta foydalanuvchiga admin huquqi berildi.`);
+});
+
+bot.command("webapp", (ctx) => {
+  ctx.reply("🔗 Web App orqali ro'yxatdan o'tish:", {
+    reply_markup: {
+      inline_keyboard: [
+        [
+          {
+            text: "📝 Ro'yxatdan o'tish",
+            web_app: { url: "https://biologiyarenessans-jet.vercel.app/" },
+          },
+        ],
+      ],
+    },
+  });
+});
+
+bot.start((ctx) => {
+  ctx.reply("Xush kelibsiz! Quyidagi menyudan foydalaning:", {
+    reply_markup: {
+      keyboard: [
+        ["📚 Kitoblar", "🎥 Video darslar"],
+        ["💰 Balansim", "📩 Adminga murojaat"],
+      ],
+      resize_keyboard: true,
+    },
+  });
 });
 
 bot.hears("🎥 Video darslar", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user) return ctx.reply("❗ Ro'yxatdan o'tmagansiz.");
-  if (user.balance < 3) return ctx.reply("❌ RBT yetarli emas.");
-  user.balance -= 3;
-  fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
-  ctx.reply("🎥 Video dars: https://youtube.com/video");
+  const userId = ctx.from.id;
+  if (USED_LINKS.has(userId))
+    return ctx.reply("❗ Siz allaqachon kirish havolasini olgansiz.");
+  USED_LINKS.add(userId);
+  ctx.reply("📹 Video darslar guruhi: https://t.me/joinchat/xxxxx");
 });
 
 bot.hears("📚 Kitoblar", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user) return ctx.reply("❗ Ro'yxatdan o'tmagansiz.");
-  if (user.balance < 2) return ctx.reply("❌ RBT yetarli emas.");
-  user.balance -= 2;
-  fs.writeFileSync("users.json", JSON.stringify(users, null, 2));
-  ctx.reply("📚 Kitob: https://example.com/book.pdf");
+  const userId = ctx.from.id;
+  if (USED_LINKS.has(userId))
+    return ctx.reply("❗ Siz allaqachon kirish havolasini olgansiz.");
+  USED_LINKS.add(userId);
+  ctx.reply("📘 Kitoblar guruhi: https://t.me/joinchat/yyyyy");
 });
 
-bot.hears("📊 Statistika", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user?.is_admin) return ctx.reply("❌ Siz admin emassiz.");
+bot.hears("💰 Balansim", (ctx) => {
+  const users = fs.existsSync("users.json")
+    ? JSON.parse(fs.readFileSync("users.json", "utf8"))
+    : [];
+  const user = users.find((u) => u.chat_id == ctx.from.id);
+  const balance = user?.balance || 0;
+  ctx.reply(`💰 Sizda ${balance} ta RBT token mavjud.`);
+});
 
-  const totalUsers = users.length;
-  const totalTokens = users.reduce((sum, u) => sum + (u.balance || 0), 0);
+bot.hears("📩 Adminga murojaat", (ctx) => {
   ctx.reply(
-    `📊 Statistika:\n👥 Foydalanuvchilar: ${totalUsers}\n💰 Umumiy token: ${totalTokens}`
+    "✉️ Murojaatingizni shu yerga yozing va adminlar siz bilan tez orada bog'lanadi."
   );
 });
 
-bot.hears("➕ Yangi kontent", (ctx) => {
-  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
-  const user = users.find((u) => u.chat_id === ctx.from.id);
-  if (!user?.is_admin) return ctx.reply("❌ Siz admin emassiz.");
-  ctx.reply(
-    "➕ Qaysi turdagi kontent qo‘shmoqchisiz?\n(hozircha faqat statik linklar ishlaydi)"
-  );
-});
+// Webhook config
+const DOMAIN = "https://webappbot-ozlh.onrender.com";
+bot.telegram.setWebhook(`${DOMAIN}/bot${botToken}`);
+app.use(bot.webhookCallback(`/bot${botToken}`));
 
-bot.launch();
-
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`✅ Server ${PORT}-portda ishlamoqda`));
