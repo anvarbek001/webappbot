@@ -18,6 +18,7 @@ const TELEGRAM_BOT_SECRET = crypto
   .update(botToken)
   .digest();
 
+const ADMIN_PHONES = ["+998940621661", "+998938731809"];
 function validateInitData(initData) {
   try {
     const urlParams = new URLSearchParams(initData);
@@ -70,7 +71,7 @@ app.post("/register", (req, res) => {
     phone,
     balance: 10,
     ref_by: ref || null,
-    is_admin: phone === "+998940621661",
+    is_admin: ADMIN_PHONES.includes(phone),
   };
   users.push(userData);
 
