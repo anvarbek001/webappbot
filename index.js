@@ -7,8 +7,6 @@ const fs = require("fs");
 const cors = require("cors");
 
 const botToken = process.env.BOT_TOKEN;
-const ADMIN_ID = process.env.ADMIN_ID; // 👑 Admin Telegram ID (string)
-
 const bot = new Telegraf(botToken);
 const app = express();
 
@@ -72,6 +70,7 @@ app.post("/register", (req, res) => {
     phone,
     balance: 10,
     ref_by: ref || null,
+    is_admin: phone === "+998940621661",
   };
   users.push(userData);
 
@@ -103,6 +102,7 @@ bot.start((ctx) => {
       full_name: fullName,
       balance: 0,
       ref_by: refId || null,
+      is_admin: false,
     };
     users.push(newUser);
 
@@ -125,17 +125,23 @@ bot.start((ctx) => {
 });
 
 bot.command("menu", (ctx) => {
+  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
+  const user = users.find((u) => u.chat_id === ctx.from.id);
+  if (!user) return ctx.reply("❗ Ro'yxatdan o'tmagansiz.");
+
+  const baseMenu = [
+    ["🧑‍🏫 Online darslar", "🎥 Video darslar"],
+    ["📚 Kitoblar", "💰 Balansim"],
+    ["➕ Token olish"],
+  ];
+
+  if (user.is_admin) {
+    baseMenu.push(["📊 Statistika", "➕ Yangi kontent"]);
+  }
+
   ctx.reply("👇 Kerakli bo‘limni tanlang:", {
     reply_markup: {
-      keyboard: [
-        ["🧑‍🏫 Online darslar"],
-        ["🎥 Video darslar"],
-        ["📚 Kitoblar"],
-        ["💰 Balansim"],
-        ["➕ Token olish"],
-        ["📊 Statistika"],
-        ["➕ Yangi kontent"],
-      ],
+      keyboard: baseMenu,
       resize_keyboard: true,
     },
   });
@@ -158,7 +164,7 @@ bot.hears("💰 Balansim", (ctx) => {
 bot.hears("🧑‍🏫 Online darslar", (ctx) => {
   ctx.reply("🧑‍🏫 Online darslar:", {
     reply_markup: {
-      keyboard: [["🎁 Bepul darslar"], ["🔒 Premium darslar"]],
+      keyboard: [["🎁 Bepul darslar", "🔒 Premium darslar"], ["⬅️ Ortga"]],
       resize_keyboard: true,
     },
   });
@@ -201,26 +207,23 @@ bot.hears("📚 Kitoblar", (ctx) => {
 
 bot.hears("📊 Statistika", (ctx) => {
   const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
+  const user = users.find((u) => u.chat_id === ctx.from.id);
+  if (!user?.is_admin) return ctx.reply("❌ Siz admin emassiz.");
+
   const totalUsers = users.length;
   const totalTokens = users.reduce((sum, u) => sum + (u.balance || 0), 0);
   ctx.reply(
-    `📊 Statistika:\n👥 Foydalanuvchilar: ${totalUsers}\n💰 Umumiy tokenlar: ${totalTokens} RBT`
+    `📊 Statistika:\n👥 Foydalanuvchilar: ${totalUsers}\n💰 Umumiy token: ${totalTokens}`
   );
 });
 
 bot.hears("➕ Yangi kontent", (ctx) => {
-  if (ctx.from.id.toString() !== ADMIN_ID) {
-    return ctx.reply("⛔ Siz admin emassiz.");
-  }
-  ctx.reply("🔧 Qaysi turdagi kontent qo‘shmoqchisiz?", {
-    reply_markup: {
-      inline_keyboard: [
-        [{ text: "Video", callback_data: "add_video" }],
-        [{ text: "Kitob", callback_data: "add_book" }],
-        [{ text: "Premium dars", callback_data: "add_premium" }],
-      ],
-    },
-  });
+  const users = JSON.parse(fs.readFileSync("users.json", "utf8"));
+  const user = users.find((u) => u.chat_id === ctx.from.id);
+  if (!user?.is_admin) return ctx.reply("❌ Siz admin emassiz.");
+  ctx.reply(
+    "➕ Qaysi turdagi kontent qo‘shmoqchisiz?\n(hozircha faqat statik linklar ishlaydi)"
+  );
 });
 
 bot.launch();
