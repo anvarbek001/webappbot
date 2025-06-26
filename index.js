@@ -22,7 +22,6 @@ const TELEGRAM_BOT_SECRET = crypto
 const ADMIN_PHONES = ["+998940621661", "+998938731809"];
 const USED_LINKS = new Set();
 
-// ✅ initData tekshiruv
 function validateInitData(initData) {
   try {
     const urlParams = new URLSearchParams(initData);
@@ -42,7 +41,6 @@ function validateInitData(initData) {
   }
 }
 
-// 💾 Foydalanuvchini ro'yxatdan o'tkazish
 app.post("/register", (req, res) => {
   const { initData, full_name, age, grade, region, district, phone, ref } =
     req.body;
@@ -89,7 +87,6 @@ app.post("/register", (req, res) => {
   res.json({ status: "success", message: "✅ Ro'yxatdan o'tdingiz!" });
 });
 
-// 🔁 Adminlarni yangilash
 bot.command("refreshadmin", (ctx) => {
   const users = fs.existsSync("users.json")
     ? JSON.parse(fs.readFileSync("users.json", "utf8"))
@@ -105,7 +102,6 @@ bot.command("refreshadmin", (ctx) => {
   ctx.reply(`✅ ${count} ta foydalanuvchiga admin huquqi berildi.`);
 });
 
-// 🌐 Web App tugmasi
 bot.command("webapp", (ctx) => {
   ctx.reply("🔗 Web App orqali ro'yxatdan o'tish:", {
     reply_markup: {
@@ -121,7 +117,6 @@ bot.command("webapp", (ctx) => {
   });
 });
 
-// 🎥 Video darslar
 bot.hears("🎥 Video darslar", (ctx) => {
   const userId = ctx.from.id;
   if (USED_LINKS.has(userId))
@@ -130,7 +125,6 @@ bot.hears("🎥 Video darslar", (ctx) => {
   ctx.reply("📹 Video darslar guruhi: https://t.me/joinchat/xxxxx");
 });
 
-// 📚 Kitoblar
 bot.hears("📚 Kitoblar", (ctx) => {
   const userId = ctx.from.id;
   if (USED_LINKS.has(userId))
@@ -139,7 +133,10 @@ bot.hears("📚 Kitoblar", (ctx) => {
   ctx.reply("📘 Kitoblar guruhi: https://t.me/joinchat/yyyyy");
 });
 
-// ▶️ Botni ishga tushurish
-bot.launch();
+// 🔁 Webhook konfiguratsiyasi
+const DOMAIN = "https://webappbot-ozlh.onrender.com";
+bot.telegram.setWebhook(`${DOMAIN}/bot${botToken}`);
+app.use(bot.webhookCallback(`/bot${botToken}`));
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`✅ Server ${PORT}-portda ishlamoqda`));
