@@ -117,6 +117,18 @@ bot.command("webapp", (ctx) => {
   });
 });
 
+bot.start((ctx) => {
+  ctx.reply("Xush kelibsiz! Quyidagi menyudan foydalaning:", {
+    reply_markup: {
+      keyboard: [
+        ["📚 Kitoblar", "🎥 Video darslar"],
+        ["💰 Balansim", "📩 Adminga murojaat"],
+      ],
+      resize_keyboard: true,
+    },
+  });
+});
+
 bot.hears("🎥 Video darslar", (ctx) => {
   const userId = ctx.from.id;
   if (USED_LINKS.has(userId))
@@ -133,10 +145,25 @@ bot.hears("📚 Kitoblar", (ctx) => {
   ctx.reply("📘 Kitoblar guruhi: https://t.me/joinchat/yyyyy");
 });
 
-// 🔁 Webhook konfiguratsiyasi
+bot.hears("💰 Balansim", (ctx) => {
+  const users = fs.existsSync("users.json")
+    ? JSON.parse(fs.readFileSync("users.json", "utf8"))
+    : [];
+  const user = users.find((u) => u.chat_id == ctx.from.id);
+  const balance = user?.balance || 0;
+  ctx.reply(`💰 Sizda ${balance} ta RBT token mavjud.`);
+});
+
+bot.hears("📩 Adminga murojaat", (ctx) => {
+  ctx.reply(
+    "✉️ Murojaatingizni shu yerga yozing va adminlar siz bilan tez orada bog'lanadi."
+  );
+});
+
+// Webhook config
 const DOMAIN = "https://webappbot-ozlh.onrender.com";
 bot.telegram.setWebhook(`${DOMAIN}/bot${botToken}`);
 app.use(bot.webhookCallback(`/bot${botToken}`));
 
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 10000;
 app.listen(PORT, () => console.log(`✅ Server ${PORT}-portda ishlamoqda`));
